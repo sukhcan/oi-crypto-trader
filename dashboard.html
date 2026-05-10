@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OI Crypto Trader — Live Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#090b10;font-family:'Courier New',monospace;color:#e0e4ef}
+  .db{min-height:100vh;display:flex;flex-direction:column}
+
+  /* HEADER */
+  .hdr{background:#11141d;border-bottom:1px solid #1e2333;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+  .hdr-left{display:flex;align-items:center;gap:14px}
+  .logo{background:#1877f2;color:#fff;font-size:11px;font-weight:700;padding:5px 12px;border-radius:5px;letter-spacing:1px}
+  .hdr-title{font-size:13px;color:#8b92a8}
+  .live-badge{display:flex;align-items:center;gap:6px;font-size:11px;color:#22c55e;background:#0c1f12;padding:4px 12px;border-radius:20px;border:1px solid #143a1e}
+  .dot{width:7px;height:7px;background:#22c55e;border-radius:50%;animation:blink 1.4s infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+  .hdr-right{display:flex;gap:10px;align-items:center}
+  .chip{background:#11141d;border:1px solid #1e2333;padding:4px 12px;border-radius:5px;font-size:11px;color:#8b92a8}
+  .err-chip{background:#1f0c0c;border:1px solid #3a1515;color:#E24B4A;padding:4px 12px;border-radius:5px;font-size:11px;display:none}
+
+  /* METRICS ROW */
+  .metrics{display:grid;grid-template-columns:repeat(5,1fr);border-bottom:1px solid #1e2333;flex-shrink:0}
+  .metric{background:#11141d;padding:14px 18px;text-align:center;border-right:1px solid #1e2333}
+  .metric:last-child{border-right:none}
+  .metric-label{font-size:9px;color:#5a6180;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
+  .metric-val{font-size:22px;font-weight:600;letter-spacing:.5px}
+  .metric-sub{font-size:10px;color:#5a6180;margin-top:3px}
+  .green{color:#22c55e}.blue{color:#378ADD}.amber{color:#EF9F27}.red{color:#E24B4A}.white{color:#e0e4ef}
+
+  /* BODY */
+  .body{display:grid;grid-template-columns:1fr 270px;flex:1;min-height:0}
+
+  /* LEFT */
+  .left{display:flex;flex-direction:column;border-right:1px solid #1e2333}
+  .chart-area{padding:16px 20px;border-bottom:1px solid #1e2333}
+  .section-title{font-size:9px;color:#5a6180;letter-spacing:1px;text-transform:uppercase;margin-bottom:12px;display:flex;justify-content:space-between}
+  .chart-wrap{position:relative;height:200px}
+
+  /* TABLE */
+  .table-area{padding:14px 20px;flex:1;overflow:auto}
+  table{width:100%;border-collapse:collapse;font-size:11px}
+  th{color:#5a6180;font-weight:400;text-align:left;padding:5px 8px;border-bottom:1px solid #1e2333;letter-spacing:.5px;font-size:9px;text-transform:uppercase}
+  td{padding:6px 8px;color:#8b92a8;border-bottom:1px solid #0f1118;white-space:nowrap}
+  td:first-child{color:#e0e4ef;font-family:'Courier New',monospace}
+  .chip-bull{font-size:9px;padding:2px 7px;border-radius:3px;background:#0f2918;color:#22c55e;white-space:nowrap}
+  .chip-bear{font-size:9px;padding:2px 7px;border-radius:3px;background:#1f0f0f;color:#E24B4A;white-space:nowrap}
+  .chip-sc  {font-size:9px;padding:2px 7px;border-radius:3px;background:#0e1a2a;color:#378ADD;white-space:nowrap}
+  .chip-ll  {font-size:9px;padding:2px 7px;border-radius:3px;background:#1f1500;color:#EF9F27;white-space:nowrap}
+  .chip-neu {font-size:9px;padding:2px 7px;border-radius:3px;background:#1a1e2d;color:#5a6180;white-space:nowrap}
+
+  /* RIGHT PANEL */
+  .right{padding:14px 16px;display:flex;flex-direction:column;gap:14px;overflow:auto}
+
+  .panel{background:#11141d;border:1px solid #1e2333;border-radius:8px;padding:12px 14px}
+  .panel-title{font-size:9px;color:#5a6180;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px}
+
+  .sig-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .sig-sym{font-size:15px;font-weight:600;color:#e0e4ef}
+  .sig-badge{font-size:11px;padding:4px 12px;border-radius:5px;font-weight:600;letter-spacing:.5px}
+  .sig-badge.buy {background:#0f2918;color:#22c55e;border:1px solid #14432a}
+  .sig-badge.sell{background:#1f0f0f;color:#E24B4A;border:1px solid #3a1515}
+  .sig-badge.neutral{background:#1a1e2d;color:#8b92a8;border:1px solid #2a2e3d}
+
+  .info-row{font-size:10px;color:#5a6180;margin-bottom:3px}
+  .info-row span{color:#8b92a8}
+
+  .oi-bar{height:4px;background:#1e2333;border-radius:2px;margin:10px 0 12px}
+  .oi-fill{height:100%;border-radius:2px;transition:width .5s ease,background .5s ease}
+
+  .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .stat{background:#090b10;border-radius:5px;padding:8px 10px}
+  .stat-k{font-size:9px;color:#5a6180;letter-spacing:.5px;text-transform:uppercase}
+  .stat-v{font-size:13px;font-weight:500;color:#e0e4ef;margin-top:3px}
+
+  .dist-wrap{position:relative;height:130px;margin-bottom:8px}
+  .dist-legend{display:flex;gap:10px;flex-wrap:wrap}
+  .dist-legend span{display:flex;align-items:center;gap:4px;font-size:10px;color:#5a6180}
+  .swatch{width:8px;height:8px;border-radius:2px;display:inline-block}
+
+  .trend-row{margin-bottom:8px}
+  .trend-top{display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px}
+  .trend-name{color:#8b92a8}
+  .trend-bar-bg{height:3px;background:#1e2333;border-radius:2px}
+  .trend-bar-fill{height:100%;border-radius:2px;transition:width .4s ease}
+
+  /* FOOTER */
+  .footer{background:#090b10;border-top:1px solid #1e2333;padding:7px 20px;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#5a6180;flex-shrink:0}
+  .footer-status{display:flex;align-items:center;gap:6px}
+  .dot-sm{width:5px;height:5px;background:#22c55e;border-radius:50%;animation:blink 1.4s infinite}
+
+  /* CONNECTION WARNING */
+  .conn-warn{background:#1a1200;border:1px solid #3a2e00;color:#EF9F27;font-size:11px;padding:8px 16px;text-align:center;display:none}
+</style>
+</head>
+<body>
+<div class="db">
+
+  <!-- HEADER -->
+  <div class="hdr">
+    <div class="hdr-left">
+      <div class="logo">OI SYSTEM</div>
+      <div class="hdr-title">OI Crypto Trader &nbsp;·&nbsp; Live Signal Dashboard</div>
+      <div class="live-badge"><div class="dot"></div><span id="srcLabel">Connecting...</span></div>
+    </div>
+    <div class="hdr-right">
+      <div class="chip" id="dateChip">--</div>
+      <div class="chip" id="clockChip">--:--:-- UTC</div>
+      <div class="err-chip" id="errChip">⚠ Signal Stale</div>
+    </div>
+  </div>
+
+  <!-- CONNECTION WARNING -->
+  <div class="conn-warn" id="connWarn">
+    ⚠ &nbsp;Cannot read signal file directly from browser. &nbsp;
+    Run <strong>server.bat</strong> in the OI_Crypto_Trader folder, then refresh this page.
+    &nbsp; Showing demo data.
+  </div>
+
+  <!-- METRICS -->
+  <div class="metrics">
+    <div class="metric"><div class="metric-label">Total Signals</div><div class="metric-val blue" id="mTotal">0</div><div class="metric-sub">since start</div></div>
+    <div class="metric"><div class="metric-label">BUY Signals</div><div class="metric-val green" id="mBuy">0</div><div class="metric-sub" id="mBuyPct">0%</div></div>
+    <div class="metric"><div class="metric-label">SELL Signals</div><div class="metric-val red" id="mSell">0</div><div class="metric-sub" id="mSellPct">0%</div></div>
+    <div class="metric"><div class="metric-label">Current OI</div><div class="metric-val amber" id="mOI">--</div><div class="metric-sub">contracts</div></div>
+    <div class="metric"><div class="metric-label">BTC Price</div><div class="metric-val white" id="mPrice">--</div><div class="metric-sub" id="mPriceChg">--</div></div>
+  </div>
+
+  <!-- BODY -->
+  <div class="body">
+
+    <!-- LEFT -->
+    <div class="left">
+      <div class="chart-area">
+        <div class="section-title">
+          <span>OI Change History <span style="color:#378ADD">— per signal bar</span></span>
+          <span id="lastUpdate" style="color:#5a6180">last update: --</span>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="oiChart" role="img" aria-label="OI change percent bar chart">OI change history</canvas>
+        </div>
+      </div>
+      <div class="table-area">
+        <div class="section-title"><span>Signal Log</span><span id="logCount" style="color:#5a6180">0 entries</span></div>
+        <table>
+          <thead>
+            <tr><th>Time</th><th>Signal</th><th>Trend</th><th>OI Δ%</th><th>Px Δ%</th><th>Price USD</th><th>OI Contracts</th></tr>
+          </thead>
+          <tbody id="logBody">
+            <tr><td colspan="7" style="text-align:center;padding:20px;color:#5a6180">Waiting for signal data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="right">
+
+      <!-- Current Signal -->
+      <div class="panel">
+        <div class="panel-title">Current Signal</div>
+        <div class="sig-row">
+          <div class="sig-sym">BTCUSDT</div>
+          <div class="sig-badge neutral" id="sigBadge">NEUTRAL</div>
+        </div>
+        <div class="info-row">Trend: <span id="sigTrend">--</span></div>
+        <div class="info-row">Published: <span id="sigPub">--</span></div>
+        <div class="oi-bar"><div class="oi-fill" id="oiFill" style="width:50%;background:#378ADD"></div></div>
+        <div class="stats-grid">
+          <div class="stat"><div class="stat-k">OI Change</div><div class="stat-v" id="sOIChg">--</div></div>
+          <div class="stat"><div class="stat-k">Px Change</div><div class="stat-v" id="sPxChg">--</div></div>
+          <div class="stat"><div class="stat-k">Current OI</div><div class="stat-v" id="sCurrOI">--</div></div>
+          <div class="stat"><div class="stat-k">Prev OI</div><div class="stat-v" id="sPrevOI">--</div></div>
+        </div>
+      </div>
+
+      <!-- Distribution -->
+      <div class="panel">
+        <div class="panel-title">Signal Distribution</div>
+        <div class="dist-wrap">
+          <canvas id="distChart" role="img" aria-label="Signal distribution donut chart">BUY SELL NEUTRAL distribution</canvas>
+        </div>
+        <div class="dist-legend">
+          <span><span class="swatch" style="background:#22c55e"></span>BUY <b id="dBuy" style="color:#e0e4ef">0</b></span>
+          <span><span class="swatch" style="background:#E24B4A"></span>SELL <b id="dSell" style="color:#e0e4ef">0</b></span>
+          <span><span class="swatch" style="background:#378ADD"></span>NEUTRAL <b id="dNeu" style="color:#e0e4ef">0</b></span>
+        </div>
+      </div>
+
+      <!-- Trend Breakdown -->
+      <div class="panel">
+        <div class="panel-title">Trend Breakdown</div>
+        <div id="trendBreak"><div style="font-size:10px;color:#5a6180;text-align:center;padding:10px">Collecting...</div></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="footer-status"><div class="dot-sm"></div><span id="srcFoot">Binance Futures · Primary Feed</span></div>
+    <div>OI Crypto Trader v1.0 &nbsp;·&nbsp; Python + MQL5 Hybrid System</div>
+    <div id="pollFoot">Polls: 0</div>
+  </div>
+
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+const MAX_HISTORY = 200;
+const POLL_MS     = 3000;   // poll server every 3s
+
+let history  = [];
+let counts   = {BUY:0, SELL:0, NEUTRAL:0};
+let trendMap = {};
+let polls    = 0;
+let lastPub  = '';
+let useServer = false;
+
+// ─── Charts ──────────────────────────────────────────────────────────────────
+const oiCtx = document.getElementById('oiChart').getContext('2d');
+const oiChart = new Chart(oiCtx, {
+  type: 'bar',
+  data: { labels: [], datasets: [{ label: 'OI Δ%', data: [], backgroundColor: [], borderRadius: 3, borderSkipped: false }] },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => 'OI Δ: ' + c.raw.toFixed(4) + '%' } } },
+    scales: {
+      x: { ticks: { color: '#5a6180', font: { size: 9 }, maxTicksLimit: 15 }, grid: { color: '#1e2333' } },
+      y: { ticks: { color: '#5a6180', font: { size: 9 }, callback: v => v.toFixed(2) + '%' }, grid: { color: '#1e2333' } }
+    }
+  }
+});
+
+const distCtx = document.getElementById('distChart').getContext('2d');
+const distChart = new Chart(distCtx, {
+  type: 'doughnut',
+  data: { labels: ['BUY','SELL','NEUTRAL'], datasets: [{ data: [0,0,1], backgroundColor: ['#22c55e','#E24B4A','#378ADD'], borderWidth: 0, hoverOffset: 4 }] },
+  options: { responsive: true, maintainAspectRatio: false, cutout: '68%', plugins: { legend: { display: false } } }
+});
+
+// ─── Clock ───────────────────────────────────────────────────────────────────
+setInterval(() => {
+  const now = new Date();
+  document.getElementById('clockChip').textContent = now.toUTCString().slice(17,25) + ' UTC';
+}, 1000);
+
+// ─── Ingest one signal object ─────────────────────────────────────────────
+function ingest(sig) {
+  if (!sig || !sig.signal) return;
+  if (sig.published_at === lastPub) return;   // deduplicate
+  lastPub = sig.published_at;
+
+  const t = (sig.published_at || '').slice(11,19);
+
+  history.push({ t, sig });
+  if (history.length > MAX_HISTORY) history.shift();
+
+  counts[sig.signal] = (counts[sig.signal] || 0) + 1;
+  trendMap[sig.trend_label] = (trendMap[sig.trend_label] || 0) + 1;
+
+  // push chart data
+  oiChart.data.labels.push(t);
+  const v = sig.oi_change_pct || 0;
+  oiChart.data.datasets[0].data.push(v);
+  oiChart.data.datasets[0].backgroundColor.push(v >= 0.5 ? '#22c55e' : v <= -0.5 ? '#E24B4A' : '#378ADD');
+  if (oiChart.data.labels.length > 40) {
+    oiChart.data.labels.shift();
+    oiChart.data.datasets[0].data.shift();
+    oiChart.data.datasets[0].backgroundColor.shift();
+  }
+  oiChart.update('none');
+
+  renderAll(sig);
+}
+
+function renderAll(sig) {
+  const total = history.length;
+
+  // Metrics
+  document.getElementById('mTotal').textContent  = total;
+  document.getElementById('mBuy').textContent    = counts.BUY   || 0;
+  document.getElementById('mSell').textContent   = counts.SELL  || 0;
+  document.getElementById('mBuyPct').textContent = ((counts.BUY||0)/Math.max(total,1)*100).toFixed(0) + '% of signals';
+  document.getElementById('mSellPct').textContent= ((counts.SELL||0)/Math.max(total,1)*100).toFixed(0) + '% of signals';
+  document.getElementById('mOI').textContent     = (sig.current_oi||0).toLocaleString(undefined,{maximumFractionDigits:0});
+  document.getElementById('mPrice').textContent  = '$' + (sig.current_price||0).toLocaleString(undefined,{maximumFractionDigits:0});
+  const pchg = sig.price_change_pct || 0;
+  const pEl  = document.getElementById('mPriceChg');
+  pEl.textContent = (pchg >= 0 ? '+' : '') + pchg.toFixed(4) + '%';
+  pEl.style.color = pchg > 0 ? '#22c55e' : pchg < 0 ? '#E24B4A' : '#8b92a8';
+
+  // Signal card
+  const badge = document.getElementById('sigBadge');
+  badge.textContent  = sig.signal;
+  badge.className    = 'sig-badge ' + (sig.signal === 'BUY' ? 'buy' : sig.signal === 'SELL' ? 'sell' : 'neutral');
+  document.getElementById('sigTrend').textContent = (sig.trend_label||'--').replace(/_/g,' ');
+  document.getElementById('sigPub').textContent   = (sig.published_at||'--').slice(11,19) + ' UTC';
+
+  const oi_chg = sig.oi_change_pct || 0;
+  const fillPct = Math.min(100, Math.max(5, 50 + oi_chg * 30));
+  const fillEl  = document.getElementById('oiFill');
+  fillEl.style.width      = fillPct + '%';
+  fillEl.style.background = oi_chg >= 0.5 ? '#22c55e' : oi_chg <= -0.5 ? '#E24B4A' : '#378ADD';
+
+  const oiChgEl = document.getElementById('sOIChg');
+  oiChgEl.textContent = (oi_chg >= 0 ? '+' : '') + oi_chg.toFixed(4) + '%';
+  oiChgEl.style.color = oi_chg >= 0.5 ? '#22c55e' : oi_chg <= -0.5 ? '#E24B4A' : '#e0e4ef';
+
+  const pxChgEl = document.getElementById('sPxChg');
+  pxChgEl.textContent = (pchg >= 0 ? '+' : '') + pchg.toFixed(4) + '%';
+  pxChgEl.style.color = pchg > 0 ? '#22c55e' : pchg < 0 ? '#E24B4A' : '#e0e4ef';
+
+  document.getElementById('sCurrOI').textContent = (sig.current_oi||0).toLocaleString(undefined,{maximumFractionDigits:0});
+  document.getElementById('sPrevOI').textContent = (sig.previous_oi||0).toLocaleString(undefined,{maximumFractionDigits:0});
+
+  // Distribution chart
+  distChart.data.datasets[0].data = [counts.BUY||0, counts.SELL||0, counts.NEUTRAL||0];
+  distChart.update('none');
+  document.getElementById('dBuy').textContent  = counts.BUY  || 0;
+  document.getElementById('dSell').textContent = counts.SELL || 0;
+  document.getElementById('dNeu').textContent  = counts.NEUTRAL || 0;
+
+  // Trend breakdown
+  const trendColors = { BULLISH_TREND:'#22c55e', BEARISH_TREND:'#E24B4A', SHORT_COVERING:'#378ADD', LONG_LIQUIDATION:'#EF9F27', NEUTRAL:'#5a6180' };
+  const trendHtml = Object.entries(trendMap).sort((a,b)=>b[1]-a[1]).map(([k,v]) => {
+    const pct = (v/total*100).toFixed(0);
+    const col = trendColors[k] || '#5a6180';
+    return `<div class="trend-row">
+      <div class="trend-top"><span class="trend-name">${k.replace(/_/g,' ')}</span><span style="color:${col}">${v} &nbsp;${pct}%</span></div>
+      <div class="trend-bar-bg"><div class="trend-bar-fill" style="width:${pct}%;background:${col}"></div></div>
+    </div>`;
+  }).join('');
+  document.getElementById('trendBreak').innerHTML = trendHtml || '<div style="font-size:10px;color:#5a6180;text-align:center;padding:10px">Collecting...</div>';
+
+  // Log table (last 12, newest first)
+  const rows = history.slice(-12).reverse().map(h => {
+    const s = h.sig;
+    const sc = s.signal==='BUY'?'#22c55e':s.signal==='SELL'?'#E24B4A':'#8b92a8';
+    const tc = s.trend_label==='BULLISH_TREND'?'bull':s.trend_label==='BEARISH_TREND'?'bear':s.trend_label==='SHORT_COVERING'?'sc':s.trend_label==='LONG_LIQUIDATION'?'ll':'neu';
+    const oc = (s.oi_change_pct||0) >= 0.5 ? '#22c55e' : (s.oi_change_pct||0) <= -0.5 ? '#E24B4A' : '#8b92a8';
+    const pc = (s.price_change_pct||0) > 0 ? '#22c55e' : (s.price_change_pct||0) < 0 ? '#E24B4A' : '#8b92a8';
+    return `<tr>
+      <td>${h.t}</td>
+      <td style="color:${sc};font-weight:600">${s.signal}</td>
+      <td><span class="chip-${tc}">${(s.trend_label||'').replace(/_/g,' ')}</span></td>
+      <td style="color:${oc}">${((s.oi_change_pct||0)>=0?'+':'') + (s.oi_change_pct||0).toFixed(4)}%</td>
+      <td style="color:${pc}">${((s.price_change_pct||0)>=0?'+':'') + (s.price_change_pct||0).toFixed(4)}%</td>
+      <td>$${(s.current_price||0).toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+      <td>${(s.current_oi||0).toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('logBody').innerHTML = rows || '<tr><td colspan="7" style="text-align:center;padding:16px;color:#5a6180">No signals yet</td></tr>';
+  document.getElementById('logCount').textContent = total + ' entries';
+  document.getElementById('lastUpdate').textContent = 'last update: ' + (sig.published_at||'').slice(11,19) + ' UTC';
+
+  // staleness check
+  if (sig.published_at) {
+    const age = (Date.now() - new Date(sig.published_at).getTime()) / 1000;
+    document.getElementById('errChip').style.display = age > 120 ? 'block' : 'none';
+  }
+
+  polls++;
+  document.getElementById('pollFoot').textContent = 'Polls: ' + polls;
+  document.getElementById('dateChip').textContent  = new Date().toISOString().slice(0,10);
+}
+
+// ─── Fetch from local Python server ──────────────────────────────────────────
+async function fetchSignal() {
+  try {
+    const res = await fetch('http://localhost:8765/signal', { cache: 'no-store' });
+    if (!res.ok) throw new Error('status ' + res.status);
+    const data = await res.json();
+    useServer = true;
+    document.getElementById('srcLabel').textContent = 'Binance Futures · Live';
+    document.getElementById('connWarn').style.display = 'none';
+    document.getElementById('srcFoot').textContent   = 'Binance Futures · Primary Feed · server:8765';
+    ingest(data);
+  } catch(e) {
+    if (!useServer) {
+      document.getElementById('connWarn').style.display = 'block';
+      document.getElementById('srcLabel').textContent = 'Demo Mode';
+      runDemo();
+    }
+  }
+}
+
+// ─── Demo mode (when server not running) ─────────────────────────────────────
+let demoRunning = false;
+const DEMO_SIGNALS = ['NEUTRAL','NEUTRAL','BUY','NEUTRAL','SELL','BUY','NEUTRAL','NEUTRAL','SELL','BUY'];
+const DEMO_TRENDS  = ['NEUTRAL','NEUTRAL','BULLISH_TREND','NEUTRAL','BEARISH_TREND','SHORT_COVERING','NEUTRAL','NEUTRAL','LONG_LIQUIDATION','BULLISH_TREND'];
+let demoIdx = 0, demoOI = 101000, demoPrice = 80400;
+
+function runDemo() {
+  if (demoRunning) return;
+  demoRunning = true;
+  function step() {
+    const i   = demoIdx % DEMO_SIGNALS.length;
+    const oc  = parseFloat(((Math.random() - 0.45) * 1.4).toFixed(6));
+    const pc  = parseFloat(((Math.random() - 0.45) * 0.6).toFixed(6));
+    demoOI    = Math.round(demoOI * (1 + oc/100));
+    demoPrice = Math.round(demoPrice * (1 + pc/100));
+    const sig = {
+      schema_version:   1,
+      symbol:           'BTCUSDT',
+      timestamp:        new Date().toISOString(),
+      signal:           Math.abs(oc)>0.5 && Math.abs(pc)>0.1 ? DEMO_SIGNALS[i] : 'NEUTRAL',
+      trend_label:      Math.abs(oc)>0.5 && Math.abs(pc)>0.1 ? DEMO_TRENDS[i]  : 'NEUTRAL',
+      current_oi:       demoOI,
+      previous_oi:      Math.round(demoOI / (1 + oc/100)),
+      oi_change_abs:    Math.round(demoOI * oc / 100),
+      oi_change_pct:    oc,
+      current_price:    demoPrice,
+      previous_price:   Math.round(demoPrice / (1 + pc/100)),
+      price_change_pct: pc,
+      published_at:     new Date().toISOString(),
+    };
+    ingest(sig);
+    demoIdx++;
+    setTimeout(step, 4000);
+  }
+  step();
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+fetchSignal();
+setInterval(fetchSignal, POLL_MS);
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "symbol": "BTCUSDT",
+  "timestamp": "2026-05-09T17:18:25.398000+00:00",
+  "signal": "NEUTRAL",
+  "trend_label": "NEUTRAL",
+  "current_oi": 100059.434,
+  "previous_oi": 100073.432,
+  "oi_change_abs": -13.998,
+  "oi_change_pct": -0.013988,
+  "current_price": 80704.6,
+  "previous_price": 80684.5,
+  "price_change_pct": 0.024912,
+  "published_at": "2026-05-09T17:18:31.356979+00:00"
+}
