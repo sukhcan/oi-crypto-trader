@@ -4,7 +4,6 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import urllib.request
 
 PORT = int(os.environ.get("PORT", 10000))
-symbol = "BTCUSDT"
 latest_signal = {}
 lock = threading.Lock()
 
@@ -13,19 +12,29 @@ def fetch_oi():
     prev_px = None
     while True:
         try:
-            url1 = f"https://api.bybit.com/v5/market/open-interest?category=linear&symbol={symbol}&intervalTime=5min&limit=1"
-            with urllib.request.urlopen(url1, timeout=10) as r:
-                oi_data = json.loads(r.read())
-            url2 = f"https://api.bybit.com/v5/market/tickers?category=linear&symbol={symbol}"
-            with urllib.request.urlopen(url2, timeout=10) as r:
-                px_data = json.loads(r.read())
-            oi = float(oi_data["result"]["list"][0]["openInterest"])
-            price = float(px_data["result"]["list"][0]["markPrice"])
+            # CoinGlass public API - works from US
+            req = urllib.request.Request(
+                "https://open-api.coinglass.com/public/v2/open_interest?symbol=BTC",
+                headers={"User-Agent": "Mozilla/5.0"}
+            )
+            with urllib.request.urlopen(req, timeout=15) as r:
+                data = json.loads(r.read())
+            
+            records = data.get("data", [])
+            total_oi = sum(float(x.get("openInterest", 0)) for x in records)
+            prices = [float(x["price"]) for x in records if x.get("price")]
+            price = sum(prices) / len(prices) if prices else 0
+
+            if price == 0:
+                raise ValueError("No price data")
+
             if prev_oi is None:
-                prev_oi = oi
+                prev_oi = total_oi
                 prev_px = price
-            oi_chg = (oi - prev_oi) / (prev_oi + 1e-12) * 100
+
+            oi_chg = (total_oi - prev_oi) / (prev_oi + 1e-12) * 100
             px_chg = (price - prev_px) / (prev_px + 1e-12) * 100
+
             if oi_chg >= 0.5 and px_chg > 0.1:
                 sig, trend = "BUY", "BULLISH_TREND"
             elif oi_chg <= -0.5 and px_chg > 0.1:
@@ -36,24 +45,27 @@ def fetch_oi():
                 sig, trend = "SELL", "LONG_LIQUIDATION"
             else:
                 sig, trend = "NEUTRAL", "NEUTRAL"
+
             now = datetime.now(tz=timezone.utc).isoformat()
             with lock:
                 latest_signal.update({
-                    "schema_version": 1, "symbol": symbol,
+                    "schema_version": 1, "symbol": "BTCUSDT",
                     "signal": sig, "trend_label": trend,
-                    "current_oi": oi, "previous_oi": prev_oi,
-                    "oi_change_abs": oi - prev_oi,
-                    "oi_change_pct": oi_chg,
-                    "current_price": price, "previous_price": prev_px,
-                    "price_change_pct": px_chg,
+                    "current_oi": round(total_oi, 2),
+                    "previous_oi": round(prev_oi, 2),
+                    "oi_change_abs": round(total_oi - prev_oi, 2),
+                    "oi_change_pct": round(oi_chg, 6),
+                    "current_price": round(price, 2),
+                    "previous_price": round(prev_px, 2),
+                    "price_change_pct": round(px_chg, 6),
                     "published_at": now, "timestamp": now,
                 })
-            print(f"[OI] {sig} OI={oi:.0f} Price={price:.0f} OI_chg={oi_chg:.4f}%", flush=True)
-            prev_oi = oi
+            print(f"[OI] {sig} OI={total_oi:.0f} Price={price:.0f} chg={oi_chg:.4f}%", flush=True)
+            prev_oi = total_oi
             prev_px = price
         except Exception as e:
             print(f"[ERROR] {e}", flush=True)
-        time.sleep(30)
+        time.sleep(60)
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -64,8 +76,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, "application/json", data)
         elif path in ("/", "/index.html"):
             try:
-                html = open("index.html", "rb").read()
-                self._send(200, "text/html", html)
+                self._send(200, "text/html", open("index.html","rb").read())
             except:
                 self._send(200, "text/html", b"<h1>OI Trader Live</h1>")
         elif path == "/manifest.json":
