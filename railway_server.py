@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 import urllib.request
 
-PORT = int(os.environ.get("PORT", 8765))
+PORT = int(os.environ.get("PORT", 10000))
 symbol = "BTCUSDT"
 latest_signal = {}
 lock = threading.Lock()
@@ -128,4 +128,5 @@ if __name__ == "__main__":
     t = threading.Thread(target=fetch_oi, daemon=True)
     t.start()
     print(f"[SERVER] Starting on port {PORT}")
+    print(f"[SERVER] Starting on port {PORT}", flush=True)
     HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
